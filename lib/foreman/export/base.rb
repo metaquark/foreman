@@ -120,6 +120,7 @@ private ######################################################################
       matchers << File.join(options[:template], name_without_first) if options[:template]
       matchers << File.expand_path("~/.foreman/templates/#{name}")
       matchers << File.expand_path("../../../../data/export/#{name}", __FILE__)
+      matchers << File.new(name)
       File.read(matchers.detect { |m| File.exists?(m) })
     end
   end
