@@ -1,7 +1,7 @@
 require "foreman"
-require "foreman/env"
 require "foreman/process"
 require "foreman/procfile"
+require "dotenv"
 require "tempfile"
 require "timeout"
 require "fileutils"
@@ -52,9 +52,6 @@ class Foreman::Engine
   # Start the processes registered to this +Engine+
   #
   def start
-    # Make sure foreman is the process group leader.
-    Process.setpgrp unless Foreman.windows?
-
     register_signal_handlers
     startup
     spawn_processes
@@ -172,9 +169,7 @@ class Foreman::Engine
   # @param [String] filename  A .env file to load into the environment
   #
   def load_env(filename)
-    Foreman::Env.new(filename).entries do |name, value|
-      @env[name] = value
-    end
+    @env.update Dotenv::Environment.new(filename)
   end
 
   # Send a signal to all processes started by this +Engine+
@@ -207,7 +202,7 @@ class Foreman::Engine
       kill_children(signal)
     else
       begin
-        Process.kill "-#{signal}", Process.getpgrp
+        Process.kill "-#{signal}", Process.pid
       rescue Errno::ESRCH, Errno::EPERM
       end
     end
@@ -307,6 +302,10 @@ private
 
   def name_for(pid)
     process, index = @running[pid]
+    name_for_index(process, index)
+  end
+
+  def name_for_index(process, index)
     [ @names[process], index.to_s ].compact.join(".")
   end
 
@@ -355,7 +354,8 @@ private
         reader, writer = create_pipe
         begin
           pid = process.run(:output => writer, :env => {
-            "PORT" => port_for(process, n).to_s
+            "PORT" => port_for(process, n).to_s,
+            "PS" => name_for_index(process, n)
           })
           writer.puts "started with pid #{pid}"
         rescue Errno::ENOENT
@@ -427,7 +427,7 @@ private
     end
   rescue Timeout::Error
     system  "sending SIGKILL to all processes"
-    killall "SIGKILL"
+    kill_children "SIGKILL"
   end
 
 end

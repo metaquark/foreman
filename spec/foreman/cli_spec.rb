@@ -44,13 +44,20 @@ describe "Foreman::CLI", :fakefs do
           output.should =~ /test.1 \| testing/
         end
       end
+
+      it "sets PS variable with the process name" do
+        without_fakefs do
+          output = foreman("start -f #{resource_path("Procfile")}")
+          output.should =~ /ps.1   \| PS env var is ps.1/
+        end
+      end
     end
   end
 
   describe "check" do
     it "with a valid Procfile displays the jobs" do
       write_procfile
-      foreman("check").should == "valid procfile detected (alpha, bravo)\n"
+      foreman("check").should == "valid procfile detected (alpha, bravo, foo_bar, foo-bar)\n"
     end
 
     it "with a blank Procfile displays an error" do
@@ -92,5 +99,13 @@ describe "Foreman::CLI", :fakefs do
       foreman("-v").chomp.should == Foreman::VERSION
     end
   end
+
+  describe "when posix-spawn is not present on ruby 1.8" do
+    it "should fail with an error" do
+      mock(Kernel).require('posix/spawn') { raise LoadError }
+      output = foreman("start -f #{resource_path("Procfile")}")
+      output.should == "ERROR: foreman requires gem `posix-spawn` on Ruby #{RUBY_VERSION}. Please `gem install posix-spawn`.\n"
+    end
+  end if running_ruby_18?
 
 end

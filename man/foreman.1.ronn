@@ -40,10 +40,6 @@ The following options control how the application is run:
     Specify which port to use as the base for this application. Should be
     a multiple of 1000.
 
-  * `-t`, `--tmux`:
-    Runs the processes in a tmux session. Creates one window for each process
-    and an extra window containing the output of each window (requires gawk).
-
 `foreman run` is used to run one-off commands using the same environment
 as your defined processes.
 
@@ -105,7 +101,13 @@ foreman currently supports the following output formats:
 
   * inittab
 
+  * launchd
+
   * runit
+
+  * supervisord
+
+  * systemd
 
   * upstart
 
@@ -117,6 +119,17 @@ Will export a chunk of inittab-compatible configuration:
     EX01:4:respawn:/bin/su - example -c 'PORT=5000 bundle exec thin start >> /var/log/web-1.log 2>&1'
     EX02:4:respawn:/bin/su - example -c 'PORT=5100 bundle exec rake jobs:work >> /var/log/job-1.log 2>&1'
     # ----- end foreman example processes -----
+
+## SYSTEMD EXPORT
+
+Will create a series of systemd scripts in the location you specify. Scripts
+will be structured to make the following commands valid:
+
+  `systemctl start appname.target`
+
+  `systemctl stop appname-processname.target`
+
+  `systemctl restart appname-processname-3.service`
 
 ## UPSTART EXPORT
 
@@ -137,7 +150,7 @@ to run it.
     web: bundle exec thin start
     job: bundle exec rake jobs:work
 
-A process name may contain letters, numbers amd the underscore character.
+A process name may contain letters, numbers and the underscore character.
 You can validate your Procfile format using the `check` command:
 
     $ foreman check
@@ -172,7 +185,7 @@ Export the application in upstart format:
 
 Run one process type from the application defined in a specific Procfile:
 
-    $ foreman start alpha -p ~/myapp/Procfile
+    $ foreman start alpha -f ~/myapp/Procfile
 
 ## COPYRIGHT
 

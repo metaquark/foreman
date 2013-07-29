@@ -10,6 +10,15 @@ require "fakefs/spec_helpers"
 
 $:.unshift File.expand_path("../../lib", __FILE__)
 
+begin
+  def running_ruby_18?
+    defined?(RUBY_VERSION) and RUBY_VERSION =~ /^1\.8\.\d+/
+  end
+  require 'posix/spawn' if running_ruby_18?
+rescue LoadError
+  STDERR.puts "WARNING: foreman requires gem `posix-spawn` on Ruby #{RUBY_VERSION}. Please `gem install posix-spawn`."
+end
+
 def mock_export_error(message)
   lambda { yield }.should raise_error(Foreman::Export::Exception, message)
 end
@@ -19,6 +28,10 @@ def mock_error(subject, message)
     mock(subject).puts("ERROR: #{message}")
     yield
   end
+end
+
+def make_pipe
+  IO.method(:pipe).arity.zero? ? IO.pipe : IO.pipe("BINARY")
 end
 
 def foreman(args)
@@ -31,14 +44,18 @@ def foreman(args)
 end
 
 def forked_foreman(args)
-  rd, wr = IO.pipe("BINARY")
-  Process.spawn("bundle exec bin/foreman #{args}", :out => wr, :err => wr)
+  rd, wr = make_pipe
+  if running_ruby_18?
+    POSIX::Spawn.spawn({}, "bundle exec bin/foreman #{args}", :out => wr, :err => wr)
+  else
+    Process.spawn("bundle exec bin/foreman #{args}", :out => wr, :err => wr)
+  end
   wr.close
   rd.read
 end
 
 def fork_and_capture(&blk)
-  rd, wr = IO.pipe("BINARY")
+  rd, wr = make_pipe
   pid = fork do
     rd.close
     wr.sync = true
@@ -57,7 +74,11 @@ def fork_and_capture(&blk)
 end
 
 def fork_and_get_exitstatus(args)
-  pid = Process.spawn("bundle exec bin/foreman #{args}", :out => "/dev/null", :err => "/dev/null")
+  pid = if running_ruby_18?
+    POSIX::Spawn.spawn({}, "bundle exec bin/foreman #{args}", :out => "/dev/null", :err => "/dev/null")
+  else
+    Process.spawn("bundle exec bin/foreman #{args}", :out => "/dev/null", :err => "/dev/null")
+  end
   Process.wait(pid)
   $?.exitstatus
 end
@@ -79,6 +100,8 @@ def write_procfile(procfile="Procfile", alpha_env="")
     file.puts "alpha: ./alpha" + " #{alpha_env}".rstrip
     file.puts "\n"
     file.puts "bravo:\t./bravo"
+    file.puts "foo_bar:\t./foo_bar"
+    file.puts "foo-bar:\t./foo-bar"
   end
   File.expand_path(procfile)
 end
@@ -139,7 +162,7 @@ end
 
 def capture_stdout
   old_stdout = $stdout.dup
-  rd, wr = IO.method(:pipe).arity.zero? ? IO.pipe : IO.pipe("BINARY")
+  rd, wr = make_pipe
   $stdout = wr
   yield
   wr.close
@@ -154,4 +177,5 @@ RSpec.configure do |config|
   config.order = 'rand'
   config.include FakeFS::SpecHelpers, :fakefs
   config.mock_with :rr
+  config.backtrace_clean_patterns = []
 end

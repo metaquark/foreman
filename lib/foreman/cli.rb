@@ -34,6 +34,7 @@ class Foreman::CLI < Thor
   end
 
   def start(process=nil)
+    require_posix_spawn_for_ruby_18!
     check_procfile!
     load_environment!
     engine.load_procfile(procfile)
@@ -45,6 +46,7 @@ class Foreman::CLI < Thor
 
   method_option :app,         :type => :string,  :aliases => "-a"
   method_option :log,         :type => :string,  :aliases => "-l"
+  method_option :run,         :type => :string,  :aliases => "-r", :desc => "Specify the pid file directory, defaults to /var/run/<application>"
   method_option :env,         :type => :string,  :aliases => "-e", :desc => "Specify an environment file to load, defaults to .env"
   method_option :port,        :type => :numeric, :aliases => "-p"
   method_option :user,        :type => :string,  :aliases => "-u"
@@ -135,6 +137,14 @@ private ######################################################################
       default_env = File.join(engine.root, ".env")
       engine.load_env default_env if File.exists?(default_env)
     end
+  end
+
+  def require_posix_spawn_for_ruby_18!
+    begin
+      Kernel.require 'posix/spawn' # Use Kernel explicitly so we can mock the require call in the spec
+    rescue LoadError
+      error "foreman requires gem `posix-spawn` on Ruby #{RUBY_VERSION}. Please `gem install posix-spawn`."
+    end if Foreman.ruby_18?
   end
 
   def procfile
